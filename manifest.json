@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Vocal Bubble",
+  "version": "1.0.0",
+  "description": "Bôi một từ tiếng Anh để tự động thêm vào English Study. Chuột phải để sửa thủ công.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_title": "Vocal Bubble",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "permissions": ["contextMenus", "activeTab", "storage", "tabs"],
+  "host_permissions": ["https://personal-blog-five-ruddy.vercel.app/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["shared.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

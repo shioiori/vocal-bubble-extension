@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Add word</title>
+    <link rel="stylesheet" href="addword.css" />
+  </head>
+  <body>
+    <main class="ewqa-main">
+      <div class="ewqa-header">
+        <span id="modeTitle" class="ewqa-mode-title">Thêm từ mới</span>
+      </div>
+
+      <div id="loadError" class="ewqa-error" hidden></div>
+
+      <div class="ewqa-field">
+        <label>Từ / cụm từ</label>
+        <input id="wordInput" type="text" />
+      </div>
+
+      <div id="senses" class="ewqa-senses"></div>
+
+      <div class="ewqa-actions-row">
+        <button id="addSenseBtn" type="button" class="ewqa-btn-outline">+ Thêm nghĩa</button>
+        <button id="autoFillBtn" type="button" class="ewqa-btn-outline">Thử lại tự động điền</button>
+      </div>
+
+      <div class="ewqa-actions-row">
+        <button id="suggestRelatedBtn" type="button" class="ewqa-btn-outline">Gợi ý từ liên đới (AI)</button>
+      </div>
+      <div id="relatedList" class="ewqa-related-list" hidden></div>
+
+      <div id="status" class="ewqa-status" role="status"></div>
+    </main>
+
+    <div class="ewqa-footer">
+      <button id="cancelBtn" type="button" class="ewqa-btn-ghost">Huỷ</button>
+      <button id="saveBtn" type="button" class="ewqa-btn-primary">Lưu</button>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="addword.js"></script>
+  </body>
+</html>

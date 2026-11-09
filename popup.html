@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>Vocal Bubble</title>
+<link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="vb-popup">
+    <div class="vb-popup__title">Vocal Bubble</div>
+    <div id="vb-auth-status" class="vb-auth-status">Đang kiểm tra đăng nhập...</div>
+    <label class="vb-switch">
+      <input type="checkbox" id="vb-enabled-toggle" />
+      <span class="vb-switch__slider"></span>
+      <span class="vb-switch__label" id="vb-enabled-label">Đang bật</span>
+    </label>
+    <label class="vb-switch">
+      <input type="checkbox" id="vb-savelink-toggle" />
+      <span class="vb-switch__slider"></span>
+      <span class="vb-switch__label" id="vb-savelink-label">Lưu link nguồn</span>
+    </label>
+    <label class="vb-switch">
+      <input type="checkbox" id="vb-lemmatize-toggle" />
+      <span class="vb-switch__slider"></span>
+      <span class="vb-switch__label" id="vb-lemmatize-label">Chuẩn hoá từ (lemmatize)</span>
+    </label>
+  </div>
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
