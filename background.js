@@ -1,16 +1,20 @@
 importScripts("shared.js");
 
 // Fully automatic add, used by the floating "+" button — never shows any UI.
-// Per explicit decision: no dictionaryapi.dev crawl, no wink-lemmatizer —
-// ONE Groq call (vbFullyAiAdd) validates the raw selection is a real English
-// word/phrase, normalizes it to its dictionary base form, and writes full
-// entries (phonetic, senses, synonyms/antonyms) for it AND its word family
-// (related verb/noun/adj/phrase forms), all at once. A word already in the
-// user's list is never touched — checked BEFORE the AI call (by raw text)
-// and again AFTER (by the AI-decided lemma, which can differ from the raw
-// text), so a repeat add never spends tokens and is just reported back as
-// "duplicate" (to add more senses to an existing word, edit it manually via
-// the add-word form instead).
+// Per explicit decision, lemmatize and lookup are separate steps so a word
+// already in the user's list never reaches the (expensive) lookup call:
+//   1. AI lemmatize (vbAiLemmatize): validates the raw selection is a real
+//      English word/phrase and normalizes it to its dictionary base form.
+//      Skipped entirely — no validation either, per explicit decision — when
+//      the popup's lemmatize toggle (vbLemmatize) is off; the raw text is
+//      then used as-is.
+//   2. Duplicate check on the lemma (vbCheckDuplicate) — reported back as
+//      "duplicate" and never touched (to add more senses to an existing
+//      word, edit it manually via the add-word form instead).
+//   3. Only for a new word: AI lookup (vbAiLookup) writes full entries
+//      (phonetic, senses, synonyms/antonyms) for it AND its word family.
+// A cheap raw-text duplicate check also runs before step 1 so an exact
+// repeat add never spends any AI tokens at all.
 async function quickAddWord(wordText, sourceUrl) {
   const trimmed = (wordText || "").trim();
   if (!trimmed) return { status: "error", message: "Không có từ nào được chọn." };
@@ -21,7 +25,7 @@ async function quickAddWord(wordText, sourceUrl) {
   const user = await vbGetAuthUser();
   if (!user) return { status: "unauthorized" };
 
-  const { vbSaveLink = true } = await chrome.storage.local.get({ vbSaveLink: true });
+  const { vbSaveLink = true, vbLemmatize = true } = await chrome.storage.local.get({ vbSaveLink: true, vbLemmatize: true });
   if (!vbSaveLink) sourceUrl = null;
 
   // Passing sourceUrl here is what actually groups an already-existing word
@@ -31,15 +35,25 @@ async function quickAddWord(wordText, sourceUrl) {
   const rawDup = await vbCheckDuplicate(trimmed, sourceUrl);
   if (rawDup.exists) return { status: "duplicate", word: rawDup.word };
 
-  const result = await vbFullyAiAdd(trimmed);
-  if (!result.valid) return { status: "rejected", message: result.reason };
-  const { lemma, mainSenses, related } = result;
+  // Step 1: lemmatize (or keep the raw text when the toggle is off).
+  let lemma = trimmed;
+  if (vbLemmatize) {
+    const check = await vbAiLemmatize(trimmed);
+    if (!check.valid) return { status: "rejected", message: check.reason };
+    lemma = check.lemma;
+  }
 
-  // The AI-decided lemma can differ from the raw selection (e.g. "went" ->
-  // "go") — check again before saving, same as the old lemmatize path did.
+  // Step 2: the lemma can differ from the raw selection (e.g. "went" ->
+  // "go") — check the DB again before looking anything up.
   if (vbNormalizeForDedup(lemma) !== vbNormalizeForDedup(trimmed)) {
     const lemmaDup = await vbCheckDuplicate(lemma, sourceUrl);
     if (lemmaDup.exists) return { status: "duplicate", word: lemmaDup.word };
+  }
+
+  // Step 3: look the new word up.
+  const { mainSenses, related } = await vbAiLookup(lemma);
+  if (mainSenses.length === 0) {
+    return { status: "rejected", message: `AI không tạo được nghĩa cho "${lemma}". Thử lại sau hoặc thêm thủ công.` };
   }
 
   // Cross-link lemma <-> each newly-saved related word (and the related

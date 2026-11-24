@@ -261,7 +261,10 @@ function vbExpandEntryToSenses(e) {
   return (e.senses || []).map((s, i) => ({
     ...vbEmptySense(),
     phonetic: e.phonetic || "",
-    partOfSpeech: e.pos || "",
+    // Each sense carries its own part of speech now (a word can be noun/
+    // verb/adjective at once, each with different senses) — fall back to
+    // the entry-level tag only if the server ever omits it.
+    partOfSpeech: s.pos || e.pos || "",
     cambridgeMeaning: s.definitionEn || "",
     meaningVi: s.meaningVi || "",
     example: s.example || "",
@@ -286,33 +289,43 @@ async function vbSuggestRelatedWordEntries(wordText, partOfSpeech) {
   );
 }
 
-// Fully AI-driven add (per explicit user decision): no dictionaryapi.dev
-// crawl, no wink-lemmatizer — one Groq call validates rawWord is a real
-// English word/phrase, normalizes it to its dictionary base form (lemma),
-// and writes full entries (phonetic, ý-cảnh-grouped senses, synonyms,
-// antonyms) for the lemma AND its word family, all at once. Mirrors
-// gloss/route.ts's handleFullyAiAdd.
+// Quick-add step 1 — AI lemmatize (per explicit user decision: a separate,
+// small Groq call rather than the local wink-lemmatizer). Validates rawWord
+// is a real English word/phrase and normalizes it to its dictionary base
+// form, so the caller can check the DB for the lemma BEFORE spending the
+// much bigger lookup call (vbAiLookup). Mirrors gloss/route.ts's
+// handleAiLemmatize.
 // Returns { valid: false, reason } when the model rejects the input (not a
 // real word, a full sentence, gibberish, non-English...), or
-// { valid: true, lemma, mainSenses, related } on success — mainSenses is
-// ready to save as-is, related is the same shape vbSuggestRelatedWordEntries
-// returns (each already duplicate-checked).
-async function vbFullyAiAdd(rawWord) {
+// { valid: true, lemma }.
+async function vbAiLemmatize(rawWord) {
   const res = await vbApiFetch("/api/english/gloss", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ word: rawWord, fullyAiAdd: true })
+    body: JSON.stringify({ word: rawWord, aiLemmatize: true })
   });
-  if (!res?.valid) {
+  if (!res?.valid || !res?.lemma) {
     return { valid: false, reason: res?.reason || "Không nhận diện được đây là từ tiếng Anh hợp lệ." };
   }
-  const lemma = res.lemma;
-  const entries = res.entries || [];
-  const mainEntry = entries.find((e) => vbNormalizeForDedup(e.word) === vbNormalizeForDedup(lemma));
+  return { valid: true, lemma: res.lemma };
+}
+
+// Quick-add step 3 — AI lookup for a word already known NOT to be in the
+// user's DB: one Groq call (gloss/route.ts's handleExpandRelated) writes full
+// entries (phonetic, ý-cảnh-grouped senses, synonyms, antonyms) for the word
+// AND its word family. Returns { mainSenses, related } — mainSenses is ready
+// to save as-is (empty if the model wrote nothing for the word itself),
+// related is the same shape vbSuggestRelatedWordEntries returns (each
+// already duplicate-checked).
+async function vbAiLookup(word) {
+  const res = await vbApiFetch("/api/english/gloss", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ word, expandRelated: { word, partOfSpeech: "" } })
+  });
+  const entries = res?.entries || [];
+  const mainEntry = entries.find((e) => vbNormalizeForDedup(e.word) === vbNormalizeForDedup(word));
   const mainSenses = mainEntry ? vbExpandEntryToSenses(mainEntry) : [];
-  if (mainSenses.length === 0) {
-    return { valid: false, reason: `AI không tạo được nghĩa cho "${lemma}". Thử lại sau hoặc thêm thủ công.` };
-  }
   const relatedEntries = entries.filter((e) => e !== mainEntry);
   const related = await Promise.all(
     relatedEntries.map(async (e) => {
@@ -320,7 +333,7 @@ async function vbFullyAiAdd(rawWord) {
       return { word: e.word, pos: e.pos, isExisting: dup.exists, existingId: dup.id, senses: vbExpandEntryToSenses(e) };
     })
   );
-  return { valid: true, lemma, mainSenses, related };
+  return { mainSenses, related };
 }
 
 function vbSenseToInput(s) {
@@ -373,6 +386,7 @@ if (typeof module !== "undefined") {
     vbSyncSourceUrl,
     vbBuildSensesFromDictionary,
     vbSuggestRelatedWordEntries,
-    vbFullyAiAdd,
+    vbAiLemmatize,
+    vbAiLookup,
   };
 }
